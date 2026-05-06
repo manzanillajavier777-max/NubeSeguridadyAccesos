@@ -7,11 +7,6 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Connection")
     ?? Environment.GetEnvironmentVariable("ConnectionStrings__ConnectionSeguridadyAccesos");
 
-if (string.IsNullOrEmpty(connectionString))
-{
-    throw new Exception("Connection string NO configurado");
-}
-
 // 🔹 DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -31,10 +26,12 @@ app.Urls.Add($"http://0.0.0.0:{port}");
 // 🔹 Base de datos (elige UNA opción)
 
 // ✅ OPCIÓN SEGURA (PRODUCCIÓN)
+
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    context.Database.Migrate();
+    context.Database.EnsureDeleted();   // 💣 BORRA TODO
+    context.Database.EnsureCreated();   // 🧱 CREA BIEN
 }
 
 /*
