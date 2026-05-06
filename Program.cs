@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔹 Leer DATABASE_URL desde Render
+// 🔹 Obtener DATABASE_URL desde Render
 var rawConnection = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 if (string.IsNullOrEmpty(rawConnection))
@@ -17,7 +17,10 @@ string ConvertFromRender(string url)
     var uri = new Uri(url);
     var userInfo = uri.UserInfo.Split(':');
 
-    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+    // 🔥 FIX: si no hay puerto, usar 5432
+    var port = uri.Port == -1 ? 5432 : uri.Port;
+
+    return $"Host={uri.Host};Port={port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
 }
 
 var connectionString = ConvertFromRender(rawConnection);
@@ -35,8 +38,8 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // 🔹 Puerto dinámico (Render)
-var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
-app.Urls.Add($"http://0.0.0.0:{port}");
+var portEnv = Environment.GetEnvironmentVariable("PORT") ?? "10000";
+app.Urls.Add($"http://0.0.0.0:{portEnv}");
 
 // 🔹 Migraciones automáticas
 using (var scope = app.Services.CreateScope())
