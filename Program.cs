@@ -3,9 +3,24 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔹 Obtener connection string (appsettings o Render)
-var connectionString = builder.Configuration.GetConnectionString("Connection")
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__ConnectionSeguridadyAccesos");
+// 🔹 Leer DATABASE_URL desde Render
+var rawConnection = Environment.GetEnvironmentVariable("DATABASE_URL");
+
+if (string.IsNullOrEmpty(rawConnection))
+{
+    throw new Exception("DATABASE_URL no configurado");
+}
+
+// 🔹 Convertir de formato Render (postgresql://...) a formato EF Core
+string ConvertFromRender(string url)
+{
+    var uri = new Uri(url);
+    var userInfo = uri.UserInfo.Split(':');
+
+    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+}
+
+var connectionString = ConvertFromRender(rawConnection);
 
 // 🔹 DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -23,34 +38,18 @@ var app = builder.Build();
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
 
-// 🔹 Base de datos (elige UNA opción)
-
-// ✅ OPCIÓN SEGURA (PRODUCCIÓN)
-
+// 🔹 Migraciones automáticas
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    context.Database.EnsureDeleted();   // 💣 BORRA TODO
-    context.Database.EnsureCreated();   // 🧱 CREA BIEN
+    context.Database.Migrate();
 }
 
-/*
-// ❌ OPCIÓN SOLO PRUEBAS (BORRA TODO)
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-    context.Database.EnsureDeleted();   // 💣 BORRA TODO
-    context.Database.EnsureCreated();   // 🧱 CREA BIEN
-}
-*/
-
-// 🔹 Swagger SIEMPRE activo (Render no usa Development)
+// 🔹 Swagger siempre activo
 app.UseSwagger();
 app.UseSwaggerUI();
 
 // 🔹 Middleware
-// app.UseHttpsRedirection(); // Mejor desactivado en Render
 app.UseAuthorization();
 
 app.MapControllers();
